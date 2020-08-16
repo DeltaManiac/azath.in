@@ -1,12 +1,12 @@
 module.exports = {
   siteMetadata: {
-    title: `Abstracted in`,
-    author: `Pushkar Anand`,
-    description: `Life from the eyes of a JS dev.`,
-    siteUrl: `https://abstracted.in/`,
+    title: "Azath House",
+    author: `DeltaManiac`,
+    description: `I am the House imprisoning in my birth demonic hearts, so locked in each chamber some trembling enraged antiquity.`,
+    siteUrl: `https://azath.in/`,
     social: {
-      twitter: `pushkar8723`,
-      github: `pushkar8723`
+      twitter:`Delta_Maniac`,
+      github: `DeltaManiac`
     },
   },
   plugins: [
@@ -92,8 +92,8 @@ module.exports = {
     {
       resolve: `gatsby-plugin-manifest`,
       options: {
-        name: `Abstracted.in`,
-        short_name: `Abstracted`,
+        name: `Azath.in`,
+        short_name: `Azath`,
         start_url: `/`,
         background_color: `#FFF4EC`,
         theme_color: `#007acc`,

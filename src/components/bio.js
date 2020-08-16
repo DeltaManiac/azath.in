@@ -3,12 +3,12 @@ import { StaticQuery, graphql } from "gatsby";
 import Image from "gatsby-image";
 import styled from "styled-components";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faJsSquare } from '@fortawesome/free-brands-svg-icons';
+import { faRust } from '@fortawesome/free-brands-svg-icons';
 import { rhythm, scale } from "../utils/typography";
 
 const bioQuery = graphql`
     query BioQuery {
-        avatar: file(absolutePath: { regex: "/profile-pic.jpeg/" }) {
+        avatar: file(absolutePath: { regex: "/avataaars.png/" }) {
             childImageSharp {
                 fixed(width: 50, height: 50) {
                     ...GatsbyImageSharpFixed
@@ -57,12 +57,12 @@ function Bio() {
                         <div>
                             Written by <strong>{author}</strong>.<br />
                             <FontAwesomeIcon
-                                icon={faJsSquare}
+                                icon={faRust}
                                 style={{
                                     height: '20px',
                                     ...scale(0.3),
                                 }}
-                            /> <Description>developer in India.</Description>
+                            /> <Description>An Aspiring Developer in India.</Description>
                         </div>
                     </Container>
                 )
