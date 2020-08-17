@@ -6,7 +6,8 @@ module.exports = {
     siteUrl: `https://azath.in/`,
     social: {
       twitter:`Delta_Maniac`,
-      github: `DeltaManiac`
+      github: `DeltaManiac`,
+      dev: `Delta_Maniac`
     },
   },
   plugins: [
