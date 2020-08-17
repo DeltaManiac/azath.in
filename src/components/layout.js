@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "gatsby";
 import styled, { createGlobalStyle } from "styled-components";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faTwitter, faGithub } from '@fortawesome/free-brands-svg-icons';
+import { faTwitter, faGithub, faDev } from '@fortawesome/free-brands-svg-icons';
 import { faCopyright, faRss } from '@fortawesome/free-solid-svg-icons';
 import { StaticQuery, graphql } from "gatsby";
 import { rhythm } from "../utils/typography";
@@ -111,6 +111,7 @@ const pageQuery = graphql`
                 social {
                     github
                     twitter
+                    dev
                 }
             }
         }
@@ -168,7 +169,7 @@ function Layout(props) {
         <StaticQuery
             query={pageQuery}
             render={data => {
-                const { twitter, github } = data.site.siteMetadata.social;
+                const { twitter, github, dev } = data.site.siteMetadata.social;
                 const pages = data.pages.edges;
                 const width = rhythm(30);
                 return (
@@ -218,6 +219,9 @@ function Layout(props) {
                                 </a>{` | `}
                                 <a href={`https://github.com/${github}`} target="_blank" rel="noreferrer noopener">
                                     <FontAwesomeIcon icon={faGithub} style={{ width: '16px', height: '16px' }} /> Github
+                                </a>{` | `}
+                                <a href={`https://dev.to/${dev}`}>
+                                        <FontAwesomeIcon icon={faDev} style={{ width: '16px', height: '16px' }} /> Dev.to
                                 </a>{` | `}
                                 <a href="/rss.xml">
                                     <FontAwesomeIcon icon={faRss} style={{ width: '16px', height: '16px' }} /> RSS
