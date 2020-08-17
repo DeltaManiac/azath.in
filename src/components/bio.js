@@ -56,13 +56,14 @@ function Bio() {
                         />
                         <div>
                             Written by <strong>{author}</strong>.<br />
-                            <FontAwesomeIcon
+                            <Description>An Aspiring <FontAwesomeIcon
                                 icon={faRust}
                                 style={{
                                     height: '20px',
                                     ...scale(0.3),
                                 }}
-                            /> <Description>An Aspiring Developer in India.</Description>
+                            />
+                             Developer in India.</Description>
                         </div>
                     </Container>
                 )
