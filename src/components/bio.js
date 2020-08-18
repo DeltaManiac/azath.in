@@ -62,8 +62,7 @@ function Bio() {
                                     height: '20px',
                                     ...scale(0.3),
                                 }}
-                            />
-                             Developer in India.</Description>
+                            /> Developer in India.</Description>
                         </div>
                     </Container>
                 )
