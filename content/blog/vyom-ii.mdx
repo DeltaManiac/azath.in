@@ -1,0 +1,353 @@
+---
+title:  "Vyom a Reddit Bot - Part II"
+description: "The surmised version of how to write a Reddit Bot in rust"
+date :  "2020-08-12"
+keywords: "Bot,Rust,Reddit"
+featured: true
+---
+# Here we go again
+
+If you had read the poem mentioned in the previous part, you can be pretty sure what we are going to do right now. You Betcha! We are going to go down the Rabbit Hole.
+
+Just as in the poem it would have been easy for us to change the library to something that already has a `mark as read` method like many do and continue on, but like Frost we will take the road not taken and that might make all the difference. 😉
+
+# Down the Rabbit Hole
+
+We actually got stumped on the last part because there was no method to mark a message as read in `roux`. This makes one wonder if there isn't such an api for reddit or that `roux` just didn't implement it.
+
+Lets head to [reddit api docs](https://www.reddit.com/dev/api) and try our luck.
+
+Yep, reddit does have a [`read_message`](https://www.reddit.com/dev/api#POST_api_read_message) api for us to use exactly for this purpose. The api accepts a list of [fullnames](https://www.reddit.com/dev/api#fullnames) with an HTTP POST method.
+
+What is the `fullname` for our message ? Its nothing but the `name` parameter of the struct.
+
+Now to fix `roux`, so that we can mark the message as read.
+
+Lets clone the [roux source code](https://github.com/halcyonnouveau/roux.rs) into another directory.
+
+Since the `comment` method we used is an api which POSTS the comment data to reddit. Perhaps we can ~~reuse~~, who are we kidding ? We can definitely _copy-paste_ and modify the code to send some data to the `read_message` api.
+
+> While searching for a way to mark a message as read, we came up across another api [`message/unread`](https://www.reddit.com/dev/api#GET_message_unread) which returns only the unread messages from our inbox, so we don't have to filter out on the `new` flag of the response anymore. Yay!
+
+```rust
+# src/me/mod.rs
+...
+/// Get user's submitted posts.
+    pub async fn inbox(&self) -> Result<BasicListing<InboxItem>, RouxError> {
+        Ok(self
+            .get("message/inbox")
+            .await?
+            .json::<BasicListing<InboxItem>>()
+            .await?)
+    }
+
+/** This is our addition **/
+///  Get users unread messages
+    pub async fn unread(&self) -> Result<BasicListing<InboxItem>, RouxError> {
+        Ok(self
+            .get("message/unread")
+            .await?
+            .json::<BasicListing<InboxItem>>()
+            .await?)
+    }
+
+/** This is our addition **/
+/// Mark message as read
+    pub async fn mark_read(&self, ids: &str) -> Result<Response, RouxError> {
+        let form = [("id", ids)];
+        self.post("api/read_message", &form).await
+    }
+
+/** This is our addition **/
+/// Mark messages as unread
+    pub async fn mark_read(&self, ids: &str) -> Result<Response, RouxError> {
+        let form = [("id", ids)];
+        self.post("api/unread_message", &form).await
+    }
+
+    pub async fn comment(&self, text: &str, parent: &str) -> Result<Response, RouxError> {
+        let form = [("text", text), ("parent", parent)];
+        self.post("api/comment", &form).await
+    }
+...
+```
+
+> I've submitted a [PR](https://github.com/halcyonnouveau/roux.rs/pull/13) to roux with these changes.
+
+So all is good and well with the change, but how do we use this changed version with our code ?
+
+`Cargo.toml` is the answer. We can tell `Cargo.toml` to use the code from a directory or from a url for a specified crate. Since we have a the modified source code in our system, we can point to that to get it working.
+
+```toml
+# Cargo.toml
+
+[package]
+name = "vyom"
+version = "0.1.0"
+authors = ["Harikrishnan Menon <harikrishnan.menon@sap.com>"]
+edition = "2018"
+
+[dependencies]
+roux={path="../roux.rs"} #This points to our local modified copy
+# roux={git = "https://github.com/DeltaManiac/roux.rs"} #This points to the modified version on github
+dotenv_codegen="0.15.0"
+tokio = {version="0.2.22", features=["macros"]}
+env_logger ="0.7.1"
+log = "0.4.11"
+```
+
+When we build our project now, we can see that it picks up the roux source code from the new path specified by us.
+
+```shell
+(base) DeltaManiac @ ~/git/rust/vyom
+└─ $ cargo build
+   Compiling roux v1.0.1-alpha.0 (/Users/DeltaManiac/git/rust/roux.rs)
+   Compiling vyom v0.1.0 (/Users/DeltaManiac/git/rust/vyom)
+   Finished dev [unoptimized + debuginfo] target(s) in 6.70s
+```
+
+> If we don't want go through the hassle of doing this, we can point cargo to my fork which has the necessary changes. This is how the code would be in the repository.
+
+## Actually Squashing the Bug
+
+Now that we are back from our exceedingly educating trip down the rabbit hole, lets see how we can finally mark a message as read after we reply to it.
+
+```rust
+# main.rs
+...
+...
+// Fetch only the unread messages form the inbox of the logged in user
+Ok(client) => match client.unread().await {
+    Ok(listing) => {
+        for message in listing.data.children.iter() {
+            // We have removed the `new` check
+            if message.data.r#type == "username_mention" {
+                match client
+                    .comment(
+                        "Thank you for standing by while we squished a bug. You shouldn't be seeing this message again!",
+                        &message.data.name.as_str(),
+                    )
+                    .await
+                {
+                    Ok(_) => {
+                        info!("Replied to {}", message.data.name);
+                        match client.mark_read(message.data.name.as_str()).await {
+                            Ok(_) => info!("Marked {} as read", message.data.name),
+                            Err(_) => {
+                                error!("Failed to mark {} as read", message.data.name)
+                            }
+                        }
+                    }
+                    Err(_) => error!("Failed to reply to mention {}", message.data.name),
+                };
+            }
+        }
+    }
+...
+...
+```
+
+We have changed the reply text so that we can identify from reddit that it is actually the new reply that is being sent, and we call the `mark_read` method form the modified crate to mark the message as read.
+
+Lets run the code and see if it works. Fingers Crossed.
+
+```shell
+(base) DeltaManiac @ ~/git/rust/vyom
+└─ $ cargo run
+   Compiling vyom v0.1.0
+    Finished dev [unoptimized + debuginfo] target(s) in 4.41s
+     Running `target/debug/vyom`
+[2020-08-09T16:38:11Z INFO  vyom] Replied to t1_g0vfbra
+[2020-08-09T16:38:11Z INFO  vyom] Marked t1_g0vfbra as read
+```
+
+Cool, but does it actually mark the message as read? Lets run the program again a couple more times and figure it out.
+
+```shell
+(base) DeltaManiac @ ~/git/rust/vyom
+└─ $ cargo run
+    Finished dev [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/vyom`
+(base) DeltaManiac @ ~/git/rust/vyom
+└─ $ cargo run
+    Finished dev [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/vyom`
+(base) DeltaManiac @ ~/git/rust/vyom
+└─ $
+```
+
+Since there doesn't seem to to be any logs being printed we can confirm that we are not replying again to the message. But it programming and you never know if you're right until you completely verify from reddit side too. Let go take a look at the subreddit.
+
+![Alt Text](https://dev-to-uploads.s3.amazonaws.com/i/0zxm1grbg2p41xjmmmjh.png)
+
+Yep, it has only one comment.
+
+# Extracting the Intel
+
+Now that we have figured out how to respond to comments, lets get to the actual crux of the problem.
+
+When a VyomBot gets mentioned where should he look for the Youtube link? There can be many answers to this question like
+
+1. The immediate parent comment of the mention
+2. The title of the post
+3. It could be part of the message sent to VyomBot
+
+These all seem relevant, but to keep it simple lets start with 2, i.e if the parent is a YouTube playlist link then we fetch the information and post it as a comment.
+
+In order to get the link of the playlist we are not going to use the roux library but instead handwrite it ourselves. Why you ask ? CAUSE ITS GONNA BE FUN!!
+
+> Note to reader the next part of the code is kind of hacky code and do not follow idiomatic rust. Here be Dragons 🐉🐉🐉
+
+### Constructing the Reddit Post link
+
+We can use the `context` field of the response which looks like
+
+```json
+{
+...
+...
+    name: "t1_g0vfbra",
+    created: 1596987973.0,
+    created_utc: 1596959173.0,
+    context: "/r/VyomBot/comments/i6fk15/test_playlist/g0vfbra/?context=3",
+}
+```
+
+to construct the url of the post.
+
+The first 5 parts `r`, `VyomBot`, `comments`, `i6fk15`, `test_playlist` can be used to for the url to the post.
+Let's do this right now.
+
+```rust
+# main.rs
+...
+ if message.data.r#type == "username_mention" {
+let post_url = format!(
+    "https://www.reddit.com/{}/.json",
+    message
+        .data
+        .context // /r/VyomBot/comments/i6fk15/test_playlist/g0vfbra/?context=3
+        .trim() // remove any trailing and leading spaces
+        .split('/') // [ "", "r", "VyomBot", "comments", "i6fk15", "test_playlist", "g0vfbra", "?context=3" ]
+        .skip(1) // [ "r", "VyomBot", "comments", "i6fk15", "test_playlist", "g0vfbra", "?context=3" ]
+        .collect::<Vec<&str>>()[0..=4] // Take the first 5 [ "r", "VyomBot", "comments", "i6fk15", "test_playlist" ]
+        .join("/") // /r/VyomBot/comments/i6fk15/test_playlist/
+    );
+...
+```
+
+We now have constructed the url `https://www.reddit.com/{}/r/VyomBot/comments/i6fk15/test_playlist/.json`. The `.json` at the end tells reddit to return the JSON formatted and not the HTML page of the post id specified
+
+# Extracting the Playlist ID
+
+In order to query the url that we crafted above we would be using the [`reqwest`](https://crates.io/crates/reqwest) crate and the [`url`](https://crates.io/crates/url) crate. We fire a GET request to reddit and extract the `url` parameter from the response body which would have our link.
+
+We then would convert the response body to a dynamic json using the [`serde_json`](https://crates.io/crates/serde_json) crate and then extract the link from the `url` property of the response.
+
+Then the [`url`](https://crates.io/crates/url) crate to parse and extract the playlist id from the YouTube link. For our link
+`https://www.youtube.com/playlist?list=PLf3u8NhoEikhTC5radGrmmqdkOK-xMDoZ` the playlist id is `PLf3u8NhoEikhTC5radGrmmqdkOK-xMDoZ`.
+
+```toml
+# Cargo.toml
+
+[package]
+name = "vyom"
+version = "0.1.0"
+authors = ["Harikrishnan Menon <harikrishnan.menon@sap.com>"]
+edition = "2018"
+
+[dependencies]
+roux={path="../roux.rs"} #This points to our local modified copy
+# roux={git = "https://github.com/DeltaManiac/roux.rs"} #This points to the modified version on github
+dotenv_codegen="0.15.0"
+tokio = {version="0.2.22", features=["macros"]}
+env_logger ="0.7.1"
+log = "0.4.11"
+reqwest = {version="0.10.7",features=["json"]} // New
+serde_json = "1.0.57" // New
+url = "2.1.1"  // New
+
+```
+
+```rust
+# main.rs
+...
+...
+// Make an http request to the post url
+let playlist_id = match reqwest::get(&post_url).await {
+    // If the response is received convert it in to dynamic json
+    Ok(response) => match response.json::<serde_json::Value>().await {
+        Ok(json) => {
+            // Get json[0]["data"]["children][0]["url}
+            // NB: DO NOT USE THIS CODE IN PRODUCTION
+            let url = match json
+                .get(0)
+                .unwrap()
+                .get("data")
+                .unwrap()
+                .get("children")
+                .unwrap()
+                .get(0)
+                .unwrap()
+                .get("data")
+                .unwrap()
+                .get("url")
+            {
+                // Parse the youtube url from the string
+                // "https://www.youtube.com/playlist?list=PLf3u8NhoEikhTC5radGrmmqdkOK-xMDoZ"
+                // after trimming `"`
+                Some(url) => match url::Url::parse(
+                    &url.to_string().trim_matches('\"'),
+                ) {
+                    Ok(url) => {
+                        match (
+                            // From the query parameters
+                            // find the parameter with key "list"
+                            url.query_pairs().find(|q| {
+                                q.0 == "list"
+                            }),
+                            // Also check if the host is youtube
+                            (url.host_str() == Some("youtube.com")
+                                || url.host_str()
+                                    == Some("www.youtube.com")),
+                        ) {
+                            (Some((_, val)), true) => {
+                                // Return the url
+                                Some(val.into_owned())
+                            }
+                            (_, _) => {
+                                error!(
+                                    "Couldn't find `list` param in url {} for message : {}",
+                                    &url.to_string(),
+                                    &message.data.name
+                                );
+                                None
+                            }
+                        }
+                    }
+                    // Error Handling
+...
+
+dbg!(playlist_id);
+...
+...
+```
+
+> A better way to handle the response is to create a struct that mimics the response and just let the `.json()` method of reqwest do the heavy lifting of converting it into rust types. This will help avoid all the calls to `unwrap`.
+
+> The nested matches statements should be replaced by `.and_then()` for a more cleaner and readable code.
+
+```shell
+(base) DeltaManiac @ ~/git/rust/vyom
+└─ $ cargo run
+Compiling vyom v0.1.0
+Finished dev [unoptimized + debuginfo] target(s) in 5.09s     Running `target/debug/vyom`
+[src/main.rs:200] "playlist_id" = "PLf3u8NhoEikhTC5radGrmmqdkOK-xMDoZ"
+[src/main.rs:200] "playlist_id" = "PLf3u8NhoEikhTC5radGrmmqdkOK-xMDoZ"
+```
+
+Hooray! We've come a long way since we started, written some atrocious code, contributed to a library and even rolled out our own code instead of using library code to talk to talk to reddit.
+
+I know its getting boring now and we're gonna wrap it up in the next part.
+
+Oh BTW the code can be found on the `part-II` branch [here](https://github.com/DeltaManiac/VyomBot)
